@@ -250,7 +250,8 @@
 
     // --- Check URL Parameters (กรณีเอามือถือแตะ NFC โดยตรง) ---
     const params = new URLSearchParams(window.location.search);
-    let isActivated = params.get('activated') === 'true';
+    const activatedByUrl = params.get('activated') === 'true';
+    let isActivated = activatedByUrl;
 
     const lockedScreen = document.getElementById('lockedScreen');
     const unlockedScreen = document.getElementById('unlockedScreen');
@@ -267,20 +268,45 @@
       btnNo.style.right = '0';
     }
 
+    function lockScreen() {
+      if (lockedScreen.style.display !== 'none') return;
+      isActivated = false;
+      lockedScreen.style.display = 'flex';
+      unlockedScreen.style.display = 'none';
+      celebrationScreen.style.display = 'none';
+    }
+
     if (isActivated) {
       unlockScreen();
     }
 
     // --- Firebase Realtime Listener (รอฟังคำสั่งจาก ESP32) ---
     if (db) {
+      let lastHeartbeatTime = Date.now();
+
       const statusRef = ref(db, 'access/status');
       onValue(statusRef, (snapshot) => {
         const data = snapshot.val();
         // ถ้า Firebase เปลี่ยนเป็น unlocked ให้ปลดล็อกหน้าเว็บทันที
         if (data === 'unlocked' && !isActivated) {
           unlockScreen();
+        } else if (data === 'locked' && !activatedByUrl) {
+          lockScreen();
         }
       });
+
+      const heartbeatRef = ref(db, 'access/heartbeat');
+      onValue(heartbeatRef, (snapshot) => {
+        lastHeartbeatTime = Date.now();
+      });
+
+      // เช็คชีพจรของบอร์ดทุกๆ 3 วินาที
+      setInterval(() => {
+        // ถ้าระบบไม่ได้ปลดล็อกผ่านการแตะมือถือโดยตรง และขาดการเชื่อมต่อจากบอร์ดเกิน 10 วินาที
+        if (!activatedByUrl && isActivated && (Date.now() - lastHeartbeatTime > 10000)) {
+          lockScreen();
+        }
+      }, 3000);
     }
 
     // --- "No" Button Runaway Logic ---
