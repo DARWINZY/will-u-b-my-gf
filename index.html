@@ -204,7 +204,31 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    // --- Firebase Setup (รอใส่ค่าหลังจากสมัคร Firebase) ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+    // ⚠️ เอาค่าจาก Firebase Project Settings มาใส่ตรงนี้
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY_HERE",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com", // หรือ .asia-southeast1.firebasedatabase.app
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Initialize Firebase
+    let db;
+    try {
+      const app = initializeApp(firebaseConfig);
+      db = getDatabase(app);
+    } catch (error) {
+      console.warn("Firebase not configured properly yet:", error);
+    }
+
     // --- Create Floating Hearts ---
     function createHearts() {
       const heartsBg = document.getElementById('heartsBg');
@@ -224,9 +248,9 @@
 
     createHearts();
 
-    // --- Check URL Parameters ---
+    // --- Check URL Parameters (กรณีเอามือถือแตะ NFC โดยตรง) ---
     const params = new URLSearchParams(window.location.search);
-    const isActivated = params.get('activated') === 'true';
+    let isActivated = params.get('activated') === 'true';
 
     const lockedScreen = document.getElementById('lockedScreen');
     const unlockedScreen = document.getElementById('unlockedScreen');
@@ -234,13 +258,29 @@
     const btnYes = document.getElementById('btnYes');
     const btnNo = document.getElementById('btnNo');
 
-    if (isActivated) {
+    function unlockScreen() {
+      if (lockedScreen.style.display === 'none') return;
+      isActivated = true;
       lockedScreen.style.display = 'none';
       unlockedScreen.style.display = 'flex';
-      
-      // Set initial positions for buttons
       btnYes.style.left = '0';
       btnNo.style.right = '0';
+    }
+
+    if (isActivated) {
+      unlockScreen();
+    }
+
+    // --- Firebase Realtime Listener (รอฟังคำสั่งจาก ESP32) ---
+    if (db) {
+      const statusRef = ref(db, 'access/status');
+      onValue(statusRef, (snapshot) => {
+        const data = snapshot.val();
+        // ถ้า Firebase เปลี่ยนเป็น unlocked ให้ปลดล็อกหน้าเว็บทันที
+        if (data === 'unlocked' && !isActivated) {
+          unlockScreen();
+        }
+      });
     }
 
     // --- "No" Button Runaway Logic ---
