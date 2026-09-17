@@ -282,30 +282,43 @@
 
     // --- Firebase Realtime Listener (รอฟังคำสั่งจาก ESP32) ---
     if (db) {
-      let lastHeartbeatTime = Date.now();
+      let lastHeartbeatValue = null;
+      let lastHeartbeatTime = 0; // 0 = สมมติว่าบอร์ดออฟไลน์ตอนเริ่ม
+      let desiredStatus = 'locked';
 
       const statusRef = ref(db, 'access/status');
       onValue(statusRef, (snapshot) => {
-        const data = snapshot.val();
-        // ถ้า Firebase เปลี่ยนเป็น unlocked ให้ปลดล็อกหน้าเว็บทันที
-        if (data === 'unlocked' && !isActivated) {
-          unlockScreen();
-        } else if (data === 'locked' && !activatedByUrl) {
-          lockScreen();
-        }
+        desiredStatus = snapshot.val();
+        checkAndApplyStatus();
       });
 
       const heartbeatRef = ref(db, 'access/heartbeat');
       onValue(heartbeatRef, (snapshot) => {
-        lastHeartbeatTime = Date.now();
+        const val = snapshot.val();
+        // ถ้าค่า heartbeat มีการเปลี่ยนแปลง (ขยับ) แปลว่าบอร์ดทำงานอยู่จริงๆ
+        if (lastHeartbeatValue !== null && val !== lastHeartbeatValue) {
+          lastHeartbeatTime = Date.now();
+          checkAndApplyStatus();
+        }
+        lastHeartbeatValue = val;
       });
 
-      // เช็คชีพจรของบอร์ดทุกๆ 3 วินาที
-      setInterval(() => {
-        // ถ้าระบบไม่ได้ปลดล็อกผ่านการแตะมือถือโดยตรง และขาดการเชื่อมต่อจากบอร์ดเกิน 10 วินาที
-        if (!activatedByUrl && isActivated && (Date.now() - lastHeartbeatTime > 10000)) {
-          lockScreen();
+      function checkAndApplyStatus() {
+        if (activatedByUrl) return; // ถ้าเข้าผ่านมือถือโดยตรง ให้ข้ามระบบล็อกอัตโนมัติ
+
+        // บอร์ดถือว่ามีชีวิต ถ้ามีอัปเดตล่าสุดไม่เกิน 10 วินาที
+        const isBoardAlive = (Date.now() - lastHeartbeatTime) <= 10000;
+        
+        if (desiredStatus === 'unlocked' && isBoardAlive) {
+          if (!isActivated) unlockScreen();
+        } else {
+          if (isActivated) lockScreen();
         }
+      }
+
+      // ตรวจสอบสถานะทุกๆ 3 วินาที
+      setInterval(() => {
+        checkAndApplyStatus();
       }, 3000);
     }
 
