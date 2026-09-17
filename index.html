@@ -248,10 +248,8 @@
 
     createHearts();
 
-    // --- Check URL Parameters (กรณีเอามือถือแตะ NFC โดยตรง) ---
-    const params = new URLSearchParams(window.location.search);
-    const activatedByUrl = params.get('activated') === 'true';
-    let isActivated = activatedByUrl;
+    // ลบระบบเช็คผ่าน URL ออก หน้าเว็บจะพึ่งพา Firebase 100%
+    let isActivated = false;
 
     const lockedScreen = document.getElementById('lockedScreen');
     const unlockedScreen = document.getElementById('unlockedScreen');
@@ -304,8 +302,6 @@
       });
 
       function checkAndApplyStatus() {
-        if (activatedByUrl) return; // ถ้าเข้าผ่านมือถือโดยตรง ให้ข้ามระบบล็อกอัตโนมัติ
-
         // บอร์ดถือว่ามีชีวิต ถ้ามีอัปเดตล่าสุดไม่เกิน 10 วินาที
         const isBoardAlive = (Date.now() - lastHeartbeatTime) <= 10000;
         
